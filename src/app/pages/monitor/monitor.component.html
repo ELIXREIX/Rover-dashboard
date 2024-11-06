@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rover Mapping Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 20px; font-family: system-ui, -apple-system, sans-serif; }
+        .dashboard { max-width: 1200px; margin: 0 auto; }
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .status {
+            display: flex;
+            gap: 20px;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #f3f4f6;
+            border-radius: 9999px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .map-container {
+            height: 600px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        .legend {
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+        .data-point {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f3f4f6;
+            border-radius: 8px;
+        }
+        .path-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .metric {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .metric-label {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        .metric-value {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>Rover GPS Mapping</h1>
+            <div class="status">
+                <div class="status-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M12 16l4-4-4-4M8 12h8"></path>
+                    </svg>
+                    <span>GPS Active</span>
+                </div>
+                <div class="status-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 17.58A5 5 0 0018 8h-1.26A8 8 0 104 16.25"></path>
+                        <path d="M8 16h.01"></path>
+                        <path d="M8 20h.01"></path>
+                        <path d="M12 18h.01"></path>
+                        <path d="M12 22h.01"></path>
+                        <path d="M16 16h.01"></path>
+                        <path d="M16 20h.01"></path>
+                    </svg>
+                    <span>Data Collection Active</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid">
+            <div class="card">
+                <div class="map-container">
+                    <div id="map"></div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Path Analysis</h2>
+                <div class="path-metrics">
+                    <div class="metric">
+                        <div class="metric-label">Distance Covered</div>
+                        <div class="metric-value">2.4 km</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Data Points</div>
+                        <div class="metric-value">127</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Average Speed</div>
+                        <div class="metric-value">1.2 m/s</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Active Time</div>
+                        <div class="metric-value">2h 15m</div>
+                    </div>
+                </div>
+                
+                <h2>Terrain Classification</h2>
+                <div id="selected-point-info">
+                    Select a point on the map to see details
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+        // Initialize the map
+        const map = L.map('map').setView([34.2, -118.5], 15);
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Generate mock rover path data
+        const generatePath = () => {
+            const path = [];
+            const basePos = [34.2, -118.5];
+            for (let i = 0; i < 50; i++) {
+                const angle = (i / 10) * Math.PI;
+                const radius = 0.001 + (Math.sin(i / 20) * 0.0005);
+                path.push([
+                    basePos[0] + (Math.sin(angle) * radius),
+                    basePos[1] + (Math.cos(angle) * radius),
+                    {
+                        terrainType: ['Fertile Soil', 'Mineral Rich', 'Dry Terrain', 'Standard Soil'][Math.floor(Math.random() * 4)],
+                        temperature: 20 + Math.random() * 10,
+                        humidity: 40 + Math.random() * 30,
+                        timestamp: new Date(Date.now() - (50 - i) * 60000)
+                    }
+                ]);
+            }
+            return path;
+        };
+
+        const roverPath = generatePath();
+
+        // Draw rover path
+        const pathLine = L.polyline(roverPath.map(p => [p[0], p[1]]), {
+            color: '#3B82F6',
+            weight: 3,
+            opacity: 0.8
+        }).addTo(map);
+
+        // Add data points
+        const terrainColors = {
+            'Fertile Soil': '#4CAF50',
+            'Mineral Rich': '#2196F3',
+            'Dry Terrain': '#FF9800',
+            'Standard Soil': '#9E9E9E'
+        };
+
+        roverPath.forEach((point, index) => {
+            const circle = L.circleMarker([point[0], point[1]], {
+                radius: 8,
+                fillColor: terrainColors[point[2].terrainType],
+                color: '#fff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map);
+
+            circle.bindPopup(`
+                <strong>Point ${index + 1}</strong><br>
+                Terrain: ${point[2].terrainType}<br>
+                Temperature: ${point[2].temperature.toFixed(1)}°C<br>
+                Humidity: ${point[2].humidity.toFixed(1)}%<br>
+                Time: ${point[2].timestamp.toLocaleTimeString()}
+            `);
+
+            circle.on('click', () => {
+                document.getElementById('selected-point-info').innerHTML = `
+                    <div class="data-point">
+                        <h3>Point ${index + 1}</h3>
+                        <p><strong>Terrain:</strong> ${point[2].terrainType}</p>
+                        <p><strong>Temperature:</strong> ${point[2].temperature.toFixed(1)}°C</p>
+                        <p><strong>Humidity:</strong> ${point[2].humidity.toFixed(1)}%</p>
+                        <p><strong>Time:</strong> ${point[2].timestamp.toLocaleTimeString()}</p>
+                    </div>
+                `;
+            });
+        });
+
+        // Add legend
+        const legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function(map) {
+            const div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = `
+                <h4>Terrain Types</h4>
+                ${Object.entries(terrainColors).map(([terrain, color]) => `
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: ${color}"></div>
+                        <span>${terrain}</span>
+                    </div>
+                `).join('')}
+            `;
+            return div;
+        };
+        legend.addTo(map);
+
+        // Add current position marker (simulated rover position)
+        const currentPosition = roverPath[roverPath.length - 1];
+        const roverMarker = L.marker([currentPosition[0], currentPosition[1]], {
+            icon: L.divIcon({
+                className: 'rover-marker',
+                html: `
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#EF4444">
+                        <circle cx="12" cy="12" r="8"/>
+                    </svg>
+                `,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            })
+        }).addTo(map);
+
+        // Simulate rover movement (optional)
+        let currentIndex = 0;
+        setInterval(() => {
+            if (currentIndex < roverPath.length - 1) {
+                currentIndex++;
+                roverMarker.setLatLng([roverPath[currentIndex][0], roverPath[currentIndex][1]]);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
