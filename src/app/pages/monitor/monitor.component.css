@@ -1,5 +1,15 @@
-body { margin: 0; padding: 20px; font-family: system-ui, -apple-system, sans-serif; }
-.dashboard { max-width: 1200px; margin: 0 auto; }
+body {
+    margin: 0;
+    padding: 20px;
+    font-family: system-ui, -apple-system, sans-serif;
+    box-sizing: border-box;
+}
+.dashboard {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    box-sizing: border-box;
+}
 .header { 
     display: flex; 
     justify-content: space-between; 
@@ -30,9 +40,10 @@ body { margin: 0; padding: 20px; font-family: system-ui, -apple-system, sans-ser
     padding: 20px;
 }
 .map-container {
-    height: 600px;
+    height: calc(100vh - 150px); /* Responsive height */
     border-radius: 8px;
     overflow: hidden;
+    max-width: 100%; /* Prevent overflow */
 }
 #map {
     height: 100%;
