@@ -79,6 +79,7 @@ nz-content {
 .inner-content {
   padding: 24px;
   background: #fff;
-  height: 100%;
+  min-height: 100%; /* Ensures it fills the parent but doesn't overflow unnecessarily */
   box-sizing: border-box;
+  overflow: auto; /* Handles any content overflow gracefully */
 }

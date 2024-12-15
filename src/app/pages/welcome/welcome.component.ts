@@ -10,6 +10,6 @@ export class WelcomeComponent implements OnInit {
 
   constructor() { }
 
-  ngOnInit() { }
+  ngOnInit(): void { }
 
 }
