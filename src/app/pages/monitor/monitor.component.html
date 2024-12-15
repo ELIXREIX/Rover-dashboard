@@ -46,12 +46,12 @@
                 <h2>Path Analysis</h2>
                 <div class="path-metrics">
                     <div class="metric">
-                        <div class="metric-label">Distance Covered</div>
+                        <div class="metric-label">Displacement</div>
                         <div class="metric-value">2.4 km</div>
-                    </div>
+                      </div>
                     <div class="metric">
                         <div class="metric-label">Data Points</div>
-                        <div class="metric-value">127</div>
+                        <div class="metric-value" id="data-points-value">0</div>
                     </div>
                     <div class="metric">
                         <div class="metric-label">Average Speed</div>
@@ -59,7 +59,7 @@
                     </div>
                     <div class="metric">
                         <div class="metric-label">Active Time</div>
-                        <div class="metric-value">2h 15m</div>
+                        <div class="metric-value">0 m</div>
                     </div>
                 </div>
                 
@@ -71,4 +71,37 @@
         </div>
     </div>
 </body>
+<script>
+    const apiUrl = 'https://2bnjthh3q9.execute-api.ap-southeast-1.amazonaws.com/ManualDeploy/upload-data';
+
+    function updateDataPoints() {
+    fetch(apiUrl)
+        .then(response => response.json())
+        .then(data => {
+            // Log the entire data to the console
+            console.log('API Data:', data);
+
+            // Check if 'Items' exists and is an array
+            if (data.Items && Array.isArray(data.Items)) {
+                const dataPoints = data.Items.length;
+                console.log('Data Points:', dataPoints);
+                // Update the metric value in the DOM
+                document.getElementById('data-points-value').textContent = dataPoints;
+            } else {
+                console.error('Invalid data structure:', data);
+                document.getElementById('data-points-value').textContent = 'Error';
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching data:', error);
+            document.getElementById('data-points-value').textContent = 'Error';
+        });
+}
+
+// Call the function when the page loads
+window.onload = updateDataPoints;
+
+// Optionally, update data every 60 seconds
+setInterval(updateDataPoints, 60000);
+</script>
 </html>
