@@ -1,0 +1,10 @@
+{
+  "/api": {
+    "target": "https://3nbdi5jfzf.execute-api.ap-southeast-1.amazonaws.com",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/api": "/Deploy"
+    }
+  }
+} 

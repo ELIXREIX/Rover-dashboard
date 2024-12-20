@@ -1,0 +1,96 @@
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #673ab7 0%, #472683 100%);
+  background-image: url('https://source.unsplash.com/random/1920x1080/?night,forest');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.login-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(71, 38, 131, 0.8);
+}
+
+.login-box {
+  background: rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  padding: 40px;
+  border-radius: 15px;
+  width: 100%;
+  max-width: 400px;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+  color: white;
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+:host ::ng-deep .ant-input-affix-wrapper {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: none !important;
+  border-radius: 5px !important;
+  color: white !important;
+}
+
+:host ::ng-deep .ant-input {
+  background: transparent !important;
+  color: white !important;
+}
+
+:host ::ng-deep .ant-input::placeholder {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+:host ::ng-deep .ant-checkbox-wrapper {
+  color: white;
+}
+
+.forgot-link {
+  color: white;
+  text-decoration: none;
+}
+
+.login-button {
+  width: 100%;
+  height: 40px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+}
+
+.register-link {
+  text-align: center;
+  color: white;
+}
+
+.register-link a {
+  color: #1890ff;
+  text-decoration: none;
+}
+
+:host ::ng-deep .anticon {
+  color: rgba(255, 255, 255, 0.7);
+}
