@@ -23,6 +23,9 @@ export class MonitorComponent implements OnInit {
   
   map!: L.Map;
   roverMarker: L.Marker | undefined;
+  private markers: L.CircleMarker[] = [];  // Store markers
+  private refreshInterval: any;
+  private readonly REFRESH_RATE = 5000;  // 5 seconds
 
   constructor(private http: HttpClient) {}
   dataPoints: number = 0;
@@ -30,8 +33,24 @@ export class MonitorComponent implements OnInit {
   ngOnInit(): void {
     this.initializeMap();
     this.fetchRoverPath();
+    this.refreshInterval = setInterval(() => {
+      this.fetchRoverPath();
+    }, this.REFRESH_RATE);
   }
 
+  ngOnDestroy(): void {
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval);
+    }
+  }
+
+  private clearMarkers(): void {
+    this.markers.forEach(marker => marker.remove());
+    this.markers = [];
+    if (this.roverMarker) {
+      this.roverMarker.remove();
+    }
+  }
   // Initialize the Leaflet map
   initializeMap(): void {
     this.map = L.map('map').setView([13.9018, 100.5317], 15);
@@ -53,92 +72,134 @@ export class MonitorComponent implements OnInit {
   }
 
   plotRoverPath(roverPath: any): void {
-    // Check if roverPath has a 'data' property that is an array
+    this.clearMarkers();  // Clear existing markers
+    console.log('Received roverPath:', roverPath);
+  
     if (roverPath && Array.isArray(roverPath.data)) {
-      // Update the data points in the UI
+      // Update the data points counter
       const dataPointsElement = document.getElementById('data-points-value');
       if (dataPointsElement) {
-      const dataPoints = roverPath.data.length;
-      dataPointsElement.textContent = dataPoints.toString();
-      }  else {
-      console.error('Element with id "data-points-value" not found.');
+        const dataPoints = roverPath.data.length;
+        dataPointsElement.textContent = dataPoints.toString();
       }
   
+      // Process each point
       roverPath.data.forEach((point: any, index: number) => {
-        // Access the actual value of latitude and longitude
         const latitude = point.Latitude ? parseFloat(point.Latitude.N) : undefined;
         const longitude = point.Longitude ? parseFloat(point.Longitude.N) : undefined;
-        const terrainType = point.TerrainType ? point.TerrainType.S : 'Unknown';
-        const temperature = point.Temperature ? parseFloat(point.Temperature.N) : NaN;
-        const humidity = point.Humidity ? parseFloat(point.Humidity.N) : NaN;
-        const timestamp = point.Timestamp ? point.Timestamp.S : '';
-
-        const firstPoint = roverPath.data[0];
-        const lastPoint = roverPath.data[roverPath.data.length - 1];
-    
-        // Extract latitudes and longitudes
-        const lat1 = firstPoint.Latitude ? parseFloat(firstPoint.Latitude.N) : 0;
-        const lon1 = firstPoint.Longitude ? parseFloat(firstPoint.Longitude.N) : 0;
-        const lat2 = lastPoint.Latitude ? parseFloat(lastPoint.Latitude.N) : 0;
-        const lon2 = lastPoint.Longitude ? parseFloat(lastPoint.Longitude.N) : 0;
-    
-        // Calculate distance between first and last points
-        const distance = this.calculateDistance(lat1, lon1, lat2, lon2);
-    
-        // Update the 'Distance Covered' display in HTML
-        document.querySelector('.metric-value')!.textContent = `${distance.toFixed(2)} km`;
-    
-        // Check if latitude and longitude are valid
+        const temperature = point.Temp ? parseFloat(point.Temp.N) : NaN;
+        const moisture = point.Moisture ? parseFloat(point.Moisture.N) : NaN;
+        const time = point.Time ? point.Time.S : '';
+        const date = point.Date ? point.Date.S : '';
+        const kValue = point.K ? parseFloat(point.K.N) : NaN;
+        const nValue = point.N ? parseFloat(point.N.N) : NaN;
+        const pValue = point.P ? parseFloat(point.P.N) : NaN;
+        const pH = point.pH ? parseFloat(point.pH.N) : NaN;
+        const ec = point.EC ? parseFloat(point.EC.N) : NaN;
+        const altitude = point.Altitude ? parseFloat(point.Altitude.N) : NaN;
+  
         if (latitude !== undefined && longitude !== undefined) {
           const circle = L.circleMarker([latitude, longitude], {
             radius: 8,
-            fillColor: this.getTerrainColor(terrainType),
+            fillColor: this.getRandomColor(),
             color: '#fff',
             weight: 2,
             opacity: 1,
             fillOpacity: 0.8
           }).addTo(this.map);
-
-    
-          circle.on('click', () => {
-            // Popup functionality
-            circle.bindPopup(`
-              <strong>Point ${index + 1}</strong><br>
-              Terrain: ${terrainType}<br>
-              Temperature: ${temperature.toFixed(1)}°C<br>
-              Humidity: ${humidity.toFixed(1)}%<br>
-              Time: ${new Date(timestamp).toLocaleTimeString()}
-            `).openPopup();
   
-            // Update the #selected-point-info div
-            const pointInfoHtml = `
-              <strong>Point ${index + 1}</strong><br>
-              Terrain: ${terrainType}<br>
-              Temperature: ${temperature.toFixed(1)}°C<br>
-              Humidity: ${humidity.toFixed(1)}%<br>
-              Time: ${new Date(timestamp).toLocaleTimeString()}
+          this.markers.push(circle);  // Store marker reference
+  
+          circle.on('click', () => {
+            // Find nearby points
+            const nearbyPoints = roverPath.data.map((p: any, globalIndex: number) => ({
+              ...p,
+              globalIndex: globalIndex + 1
+            })).filter((p: any) => {
+              const pLat = parseFloat(p.Latitude.N);
+              const pLon = parseFloat(p.Longitude.N);
+              return Math.abs(pLat - latitude) < 0.00005 && 
+                     Math.abs(pLon - longitude) < 0.00005;
+            });
+  
+            let currentPointIndex = 0;
+  
+            const updatePopupContent = (pointIndex: number) => {
+              const point = nearbyPoints[pointIndex];
+              return `
+                <div class="popup-container">
+                  <div class="popup-navigation">
+                    ${pointIndex > 0 ? '<button class="nav-btn prev">←</button>' : ''}
+                    <span>Point ${point.globalIndex} (${pointIndex + 1}/${nearbyPoints.length})</span>
+                    ${pointIndex < nearbyPoints.length - 1 ? '<button class="nav-btn next">→</button>' : ''}
+                  </div>
+                  <div class="popup-content">
+                    Temperature: ${parseFloat(point.Temp.N).toFixed(1)}°C<br>
+                    Moisture: ${parseFloat(point.Moisture.N).toFixed(1)}%<br>
+                    pH: ${parseFloat(point.pH.N).toFixed(2)}<br>
+                    NPK: ${parseFloat(point.N.N).toFixed(1)}/${parseFloat(point.P.N).toFixed(1)}/${parseFloat(point.K.N).toFixed(1)}<br>
+                    EC: ${parseFloat(point.EC.N).toFixed(2)} mS/cm<br>
+                    Time: ${point.Time.S}<br>
+                    Date: ${point.Date.S}
+                  </div>
+                </div>
+              `;
+            };
+  
+            const popup = L.popup({
+              maxWidth: 300,
+              className: 'point-popup'
+            })
+            .setLatLng([latitude, longitude])
+            .setContent(updatePopupContent(currentPointIndex));
+  
+            circle.bindPopup(popup).openPopup();
+  
+            // Add event listeners for navigation buttons
+            document.addEventListener('click', function(e) {
+              const target = e.target as HTMLElement;
+              if (target.classList.contains('prev')) {
+                currentPointIndex = Math.max(0, currentPointIndex - 1);
+                popup.setContent(updatePopupContent(currentPointIndex));
+              } else if (target.classList.contains('next')) {
+                currentPointIndex = Math.min(nearbyPoints.length - 1, currentPointIndex + 1);
+                popup.setContent(updatePopupContent(currentPointIndex));
+              }
+            });
+  
+            // Update selected point info
+            document.getElementById('selected-point-info')!.innerHTML = `
+              <div class="data-point">
+                <strong>Point ${index + 1}</strong><br>
+                Temperature: ${temperature.toFixed(1)}°C<br>
+                Moisture: ${moisture.toFixed(1)}%<br>
+                pH: ${pH.toFixed(2)}<br>
+                NPK: ${nValue.toFixed(1)}/${pValue.toFixed(1)}/${kValue.toFixed(1)}<br>
+                EC: ${ec.toFixed(2)} mS/cm<br>
+                Altitude: ${altitude}m<br>
+                Time: ${time}<br>
+                Date: ${date}
+              </div>
             `;
-            document.getElementById('selected-point-info')!.innerHTML = pointInfoHtml;
           });
-    
-          if (index === roverPath.data.length - 1) {
-            this.roverMarker = L.marker([latitude, longitude], {
-              icon: L.divIcon({
-                className: 'rover-marker',
-                html: `
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="#EF4444">
-                    <circle cx="12" cy="12" r="8"/>
-                  </svg>
-                `,
-                iconSize: [24, 24],
-                iconAnchor: [12, 12]
-              })
-            }).addTo(this.map);
-          }
-        } else {
-          console.error(`Invalid coordinates for point ${index + 1}:`, point);
         }
       });
+  
+      // Calculate and update path metrics
+      if (roverPath.data.length >= 2) {
+        const firstPoint = roverPath.data[0];
+        const lastPoint = roverPath.data[roverPath.data.length - 1];
+        const lat1 = parseFloat(firstPoint.Latitude.N);
+        const lon1 = parseFloat(firstPoint.Longitude.N);
+        const lat2 = parseFloat(lastPoint.Latitude.N);
+        const lon2 = parseFloat(lastPoint.Longitude.N);
+        const distance = this.calculateDistance(lat1, lon1, lat2, lon2);
+        
+        const distanceElement = document.querySelector('.metric-value');
+        if (distanceElement) {
+          distanceElement.textContent = `${distance.toFixed(2)} km`;
+        }
+      }
     } else {
       console.error('roverPath is not an object with a data array', roverPath);
     }
@@ -175,4 +236,13 @@ export class MonitorComponent implements OnInit {
     };
     return terrainColors[terrainType] || '#9E9E9E';
   }
+// Generate a random color
+getRandomColor(): string {
+  const letters = '0123456789ABCDEF';
+  let color = '#';
+  for (let i = 0; i < 6; i++) {
+    color += letters[Math.floor(Math.random() * 16)];
+  }
+  return color;
+}
 }
