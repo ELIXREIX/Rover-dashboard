@@ -14,13 +14,37 @@
             <h1>Rover GPS Mapping</h1>
             <div class="status">
                 <div class="status-item">
+                <div class="date-filter">
+                    <div class="date-pickers">
+                        <div class="custom-date-picker">
+                            <label for="dateSelect" class="visually-hidden">Select Date</label>
+                            <input type="date" 
+                                   id="dateSelect"
+                                   [value]="selectedDate | date:'yyyy-MM-dd'"
+                                   (change)="onDateSelect($event)"
+                                   class="date-input"
+                                   aria-label="Select date"
+                                   placeholder="Select date">
+                            <button nz-button 
+                                    nzType="default" 
+                                    class="calendar-trigger"
+                                    aria-label="Open calendar"
+                                    title="Open calendar">
+                                <i nz-icon nzType="calendar" nzTheme="outline"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                </div>
+                <div class="status-item">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"></circle>
                         <path d="M12 16l4-4-4-4M8 12h8"></path>
                     </svg>
                     <span>GPS Active</span>
                 </div>
-                <div class="status-item">
+                <div class="status-item-cloud" [class]="currentStatus">
+                    <span>{{ getCurrentStatusText() }}</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 17.58A5 5 0 0018 8h-1.26A8 8 0 104 16.25"></path>
                         <path d="M8 16h.01"></path>
@@ -30,7 +54,7 @@
                         <path d="M16 16h.01"></path>
                         <path d="M16 20h.01"></path>
                     </svg>
-                    <span>Data Collection Active</span>
+                    <nz-spin *ngIf="isLoading"></nz-spin>
                 </div>
             </div>
         </div>
@@ -47,7 +71,7 @@
                 <div class="path-metrics">
                     <div class="metric">
                         <div class="metric-label">Displacement</div>
-                        <div class="metric-value">2.4 km</div>
+                        <div class="metric-value">0 km</div>
                       </div>
                     <div class="metric">
                         <div class="metric-label">Data Points</div>
@@ -103,5 +127,7 @@ window.onload = updateDataPoints;
 
 // Optionally, update data every 6 seconds
 setInterval(updateDataPoints, 6000);
+
+
 </script>
 </html>

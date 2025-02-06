@@ -1,6 +1,19 @@
 import { Component, OnInit } from '@angular/core';
 import * as L from 'leaflet';
 import { HttpClient } from '@angular/common/http';
+import { finalize,tap } from 'rxjs/operators'
+import { NzSpinModule } from 'ng-zorro-antd/spin';
+import { differenceInDays } from 'date-fns';
+import { get } from 'http';
+import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
+import { FormsModule } from '@angular/forms';
+import { NzCalendarModule } from 'ng-zorro-antd/calendar';
+import { NzModalModule } from 'ng-zorro-antd/modal';
+import { DatePipe } from '@angular/common';
+import { NzRadioModule } from 'ng-zorro-antd/radio';
+import { NzIconModule } from 'ng-zorro-antd/icon';
+
+
 
 // Define the RoverPoint interface to type the rover path data
 interface RoverPoint {
@@ -12,30 +25,97 @@ interface RoverPoint {
   timestamp: string;
 }
 
+interface DynamoDBValue {
+  N?: string;
+  S?: string;
+}
+
+interface DynamoDBPoint {
+  Temp: DynamoDBValue;
+  Date: DynamoDBValue;
+  Altitude: DynamoDBValue;
+  Longitude: DynamoDBValue;
+  Latitude: DynamoDBValue;
+  K: DynamoDBValue;
+  Moisture: DynamoDBValue;
+  N: DynamoDBValue;
+  P: DynamoDBValue;
+  PointID: DynamoDBValue;
+  pH: DynamoDBValue;
+  Time: DynamoDBValue;
+  EC: DynamoDBValue;
+}
+
+interface APIResponse {
+  message: string;
+  data: DynamoDBPoint[];
+  total: number;
+}
+
+interface StatusResponse {
+  status: 'active' | 'pending' | 'offline';
+}
+
 @Component({
   selector: 'app-monitor',
   standalone: true,
-  imports: [],
+  imports: [NzSpinModule,
+    NzDatePickerModule,
+    NzCalendarModule,
+    NzModalModule,
+    DatePipe,
+    NzRadioModule,
+    FormsModule,
+    NzIconModule
+  ], 
   templateUrl: './monitor.component.html',
-  styleUrls: ['./monitor.component.css']
+  styleUrls: ['./monitor.component.css'],
 })
 export class MonitorComponent implements OnInit {
-  
+  isCalendarVisible: boolean = false;
+  private API_URL = 'https://hi23k7tpql.execute-api.ap-southeast-1.amazonaws.com/default/Roverdata-date';
+  dateRange: Date[] = [];
+  totalDataPoints: number = 0;
+  currentStatus: 'active' | 'pending' | 'offline' = 'pending';
   map!: L.Map;
   roverMarker: L.Marker | undefined;
   private markers: L.CircleMarker[] = [];  // Store markers
   private refreshInterval: any;
-  private readonly REFRESH_RATE = 5000;  // 5 seconds
+  private readonly REFRESH_RATE = 60000;  // 5 seconds
+  private readonly REFRESH_RATE_DB = 10000;  // 1 minutes
+  roverPoints: RoverPoint[] = [];
+  selectedDate: Date = new Date();
+  nzMode: 'month' | 'year' = 'month';
 
+  isLoading = false;
+  statusText = {
+    active: '🟢 Database Active',
+    pending: '🟡 Connection Unstable',
+    offline: '🔴 Database Not Reachable'
+  };
+
+  showCalendar(): void {
+    this.isCalendarVisible = true;
+  }
+
+  handleCalendarClose(): void {
+    this.isCalendarVisible = false;
+  }
+  
   constructor(private http: HttpClient) {}
+
   dataPoints: number = 0;
 
   ngOnInit(): void {
     this.initializeMap();
-    this.fetchRoverPath();
+    this.getDatabaseStatus();
+    // this.refreshInterval = setInterval(() => {
+    //   this.fetchRoverPath();
+    // }, this.REFRESH_RATE);
     this.refreshInterval = setInterval(() => {
-      this.fetchRoverPath();
-    }, this.REFRESH_RATE);
+      this.getDatabaseStatus();
+    }, this.REFRESH_RATE_DB);
+    console.log('Initial status:', this.currentStatus);
   }
 
   ngOnDestroy(): void {
@@ -51,6 +131,7 @@ export class MonitorComponent implements OnInit {
       this.roverMarker.remove();
     }
   }
+  
   // Initialize the Leaflet map
   initializeMap(): void {
     this.map = L.map('map').setView([13.9018, 100.5317], 15);
@@ -61,18 +142,62 @@ export class MonitorComponent implements OnInit {
   }
 
   // Fetch data from API
-  fetchRoverPath(): void {
-    const apiUrl = 'https://2bnjthh3q9.execute-api.ap-southeast-1.amazonaws.com/ManualDeploy/upload-data';  // Replace with your actual API URL
+  // fetchRoverPath(): void {
+  //   const apiUrl = 'https://2bnjthh3q9.execute-api.ap-southeast-1.amazonaws.com/ManualDeploy/upload-data';  // Replace with your actual API URL
 
-    this.http.get<any[]>(apiUrl).subscribe(data => {
-      this.plotRoverPath(data);
-    }, error => {
-      console.error('Error fetching rover path data', error);
-    });
+  //   this.http.get<any[]>(apiUrl).subscribe(data => {
+  //     this.plotRoverPath(data);
+  //   }, error => {
+  //     console.error('Error fetching rover path data', error);
+  //   });
+  // }
+  onDateSelect(event: any): void {
+    let selectedDate: Date;
+    
+    // Handle both input element change and calendar selection
+    if (event instanceof Date) {
+      selectedDate = event;
+    } else if (event.target?.value) {
+      selectedDate = new Date(event.target.value);
+    } else {
+      console.error('Invalid date event:', event);
+      return;
+    }
+  
+    this.selectedDate = selectedDate;
+    const formattedDate = selectedDate.toISOString().split('T')[0];
+    this.isCalendarVisible = false;
+  
+    // Call API and update map
+    this.http.get<APIResponse>(this.API_URL, { params: { date: formattedDate } })
+      .subscribe({
+        next: (response) => {
+          console.log('API Response:', response);
+          this.totalDataPoints = response.total;
+          this.plotRoverPath(response);
+        },
+        error: (error) => {
+          console.error('Error fetching data:', error);
+        }
+      });
+  }
+
+  fetchRoverPath(date: string): void {
+    const params = { date: date };
+
+    this.http.get<APIResponse>(this.API_URL, { params }).subscribe(
+      response => {
+        this.totalDataPoints = response.total;
+        this.plotRoverPath(response);
+      },
+      error => {
+        console.error('Error fetching rover path data', error);
+      }
+    );
   }
 
   plotRoverPath(roverPath: any): void {
-    this.clearMarkers();  // Clear existing markers
+    this.clearMarkers();
     console.log('Received roverPath:', roverPath);
   
     if (roverPath && Array.isArray(roverPath.data)) {
@@ -155,18 +280,51 @@ export class MonitorComponent implements OnInit {
   
             circle.bindPopup(popup).openPopup();
   
-            // Add event listeners for navigation buttons
-            document.addEventListener('click', function(e) {
-              const target = e.target as HTMLElement;
-              if (target.classList.contains('prev')) {
-                currentPointIndex = Math.max(0, currentPointIndex - 1);
-                popup.setContent(updatePopupContent(currentPointIndex));
-              } else if (target.classList.contains('next')) {
-                currentPointIndex = Math.min(nearbyPoints.length - 1, currentPointIndex + 1);
-                popup.setContent(updatePopupContent(currentPointIndex));
-              }
-            });
-  
+// ...existing code...
+
+// Add event listeners for navigation buttons
+document.addEventListener('click', function(e) {
+  const target = e.target as HTMLElement;
+  if (target.classList.contains('prev')) {
+    currentPointIndex = Math.max(0, currentPointIndex - 1);
+    popup.setContent(updatePopupContent(currentPointIndex));
+    // Update selected point info with current point
+    const point = nearbyPoints[currentPointIndex];
+    document.getElementById('selected-point-info')!.innerHTML = `
+      <div class="data-point">
+        <strong>Point ${point.globalIndex}</strong><br>
+        Temperature: ${parseFloat(point.Temp.N).toFixed(1)}°C<br>
+        Moisture: ${parseFloat(point.Moisture.N).toFixed(1)}%<br>
+        pH: ${parseFloat(point.pH.N).toFixed(2)}<br>
+        NPK: ${parseFloat(point.N.N).toFixed(1)}/${parseFloat(point.P.N).toFixed(1)}/${parseFloat(point.K.N).toFixed(1)}<br>
+        EC: ${parseFloat(point.EC.N).toFixed(2)} mS/cm<br>
+        Altitude: ${parseFloat(point.Altitude.N)}m<br>
+        Time: ${point.Time.S}<br>
+        Date: ${point.Date.S}
+      </div>
+    `;
+  } else if (target.classList.contains('next')) {
+    currentPointIndex = Math.min(nearbyPoints.length - 1, currentPointIndex + 1);
+    popup.setContent(updatePopupContent(currentPointIndex));
+    // Update selected point info with current point
+    const point = nearbyPoints[currentPointIndex];
+    document.getElementById('selected-point-info')!.innerHTML = `
+      <div class="data-point">
+        <strong>Point ${point.globalIndex}</strong><br>
+        Temperature: ${parseFloat(point.Temp.N).toFixed(1)}°C<br>
+        Moisture: ${parseFloat(point.Moisture.N).toFixed(1)}%<br>
+        pH: ${parseFloat(point.pH.N).toFixed(2)}<br>
+        NPK: ${parseFloat(point.N.N).toFixed(1)}/${parseFloat(point.P.N).toFixed(1)}/${parseFloat(point.K.N).toFixed(1)}<br>
+        EC: ${parseFloat(point.EC.N).toFixed(2)} mS/cm<br>
+        Altitude: ${parseFloat(point.Altitude.N)}m<br>
+        Time: ${point.Time.S}<br>
+        Date: ${point.Date.S}
+      </div>
+    `;
+  }
+});
+
+// ...existing code...
             // Update selected point info
             document.getElementById('selected-point-info')!.innerHTML = `
               <div class="data-point">
@@ -245,4 +403,36 @@ getRandomColor(): string {
   }
   return color;
 }
+
+
+
+getDatabaseStatus(): void {
+  this.isLoading = true;
+  
+  this.http.get<StatusResponse>('https://8h8rxm8ld9.execute-api.ap-southeast-1.amazonaws.com/default/Table-Status')
+    .pipe(
+      tap((response: StatusResponse) => {
+        console.log('API Response:', response);
+      }),
+      finalize(() => {
+        this.isLoading = false;
+        console.log('Request completed');
+      })
+    )
+    .subscribe({
+      next: (response: StatusResponse) => {
+        this.currentStatus = response.status;
+        console.log('Status updated:', this.currentStatus);
+      },
+      error: (error) => {
+        console.error('API Error:', error);
+        this.currentStatus = 'offline';
+      }
+    });
+}
+
+getCurrentStatusText(): string {
+  return this.statusText[this.currentStatus] || 'Unknown Status';
+}
+
 }

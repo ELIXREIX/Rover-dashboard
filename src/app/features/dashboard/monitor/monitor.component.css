@@ -1,3 +1,5 @@
+
+
 body {
     margin: 0;
     padding: 20px;
@@ -121,3 +123,162 @@ body {
   .popup-content {
     line-height: 1.5;
   }
+
+.status-item-cloud {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #f3f4f6;
+    border-radius: 9999px;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Add these keyframe animations */
+@keyframes activeGlow {
+    0% { box-shadow: 0 0 5px rgba(0, 255, 0, 0.2); }
+    50% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.4); }
+    100% { box-shadow: 0 0 5px rgba(0, 255, 0, 0.2); }
+}
+
+@keyframes pendingGlow {
+    0% { box-shadow: 0 0 5px rgba(255, 165, 0, 0.2); }
+    50% { box-shadow: 0 0 20px rgba(255, 165, 0, 0.4); }
+    100% { box-shadow: 0 0 5px rgba(255, 165, 0, 0.2); }
+}
+
+@keyframes offlineGlow {
+    0% { box-shadow: 0 0 5px rgba(255, 0, 0, 0.2); }
+    50% { box-shadow: 0 0 20px rgba(255, 0, 0, 0.4); }
+    100% { box-shadow: 0 0 5px rgba(255, 0, 0, 0.2); }
+}
+
+/* Update the status classes */
+.status-item-cloud.active {
+    background-color: rgba(0, 255, 0, 0.2);
+    color: green;
+    animation: activeGlow 2s infinite;
+}
+
+.status-item-cloud.pending {
+    background-color: rgba(255, 255, 0, 0.2);
+    color: orange;
+    animation: pendingGlow 2s infinite;
+}
+
+.status-item-cloud.offline {
+    background-color: rgba(255, 0, 0, 0.2);
+    color: red;
+    animation: offlineGlow 2s infinite;
+}
+
+/* Keep hover effects */
+.status-item-cloud.active:hover {
+    background-color: green;
+    color: white;
+    animation: none;
+}
+
+.status-item-cloud.pending:hover {
+    background-color: orange;
+    color: white;
+    animation: none;
+}
+
+.status-item-cloud.offline:hover {
+    background-color: red;
+    color: white;
+    animation: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.custom-date-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #f3f4f6;
+  border-radius: 9999px;
+  padding: 4px;
+  margin-right: 20px;
+}
+
+.date-input {
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  width: 120px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.calendar-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  border: none !important;
+  padding: 8px;
+  color: #6b7280;
+}
+
+.calendar-trigger:hover {
+  color: #1890ff;
+}
+
+.calendar-trigger i {
+  font-size: 16px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Match status item style */
+.date-filter {
+  display: flex;
+  align-items: center;
+}
+
+/* Override ng-zorro button styles */
+:host ::ng-deep {
+  .ant-btn {
+    box-shadow: none;
+  }
+  
+  .ant-btn:hover,
+  .ant-btn:focus {
+    color: #1890ff;
+    background: transparent;
+    border-color: transparent;
+  }
+}

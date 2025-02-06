@@ -5,6 +5,13 @@ import { CommonModule } from '@angular/common';
 import { NzLayoutModule } from 'ng-zorro-antd/layout';
 import { NzMenuModule } from 'ng-zorro-antd/menu';
 import { NzIconModule } from 'ng-zorro-antd/icon';
+import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
+import { FormsModule } from '@angular/forms';
+import { NzCalendarModule } from 'ng-zorro-antd/calendar';
+import { NzModalModule } from 'ng-zorro-antd/modal';
+import { DatePipe } from '@angular/common';
+import { NzRadioModule } from 'ng-zorro-antd/radio';
+
 
 @Component({
   selector: 'app-root',
@@ -15,7 +22,12 @@ import { NzIconModule } from 'ng-zorro-antd/icon';
     RouterLink,
     NzLayoutModule,
     NzMenuModule,
-    NzIconModule
+    NzIconModule,
+    FormsModule,
+    NzDatePickerModule,
+    NzModalModule,
+    NzCalendarModule,
+    NzRadioModule,
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
