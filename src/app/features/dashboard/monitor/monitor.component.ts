@@ -109,13 +109,27 @@ export class MonitorComponent implements OnInit {
   ngOnInit(): void {
     this.initializeMap();
     this.getDatabaseStatus();
-    // this.refreshInterval = setInterval(() => {
-    //   this.fetchRoverPath();
-    // }, this.REFRESH_RATE);
-    this.refreshInterval = setInterval(() => {
-      this.getDatabaseStatus();
-    }, this.REFRESH_RATE_DB);
-    console.log('Initial status:', this.currentStatus);
+
+    const knownDate = new Date();
+    this.selectedDate = knownDate;
+
+    const formattedDate = this.formatDate(knownDate);
+    console.log('Initial date set to:', formattedDate); // Debug log
+
+// Chain the initialization sequence
+    Promise.all([
+      this.getDatabaseStatus(),
+      this.fetchInitialData(formattedDate)
+    ]).then(() => {
+      console.log('Initial data and status loaded');
+      
+      // Set up database status refresh interval
+      this.refreshInterval = setInterval(() => {
+        this.getDatabaseStatus();
+      }, this.REFRESH_RATE_DB);
+    }).catch(error => {
+      console.error('Error during initialization:', error);
+    });
   }
 
   ngOnDestroy(): void {
@@ -131,14 +145,75 @@ export class MonitorComponent implements OnInit {
       this.roverMarker.remove();
     }
   }
+
+  private formatDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+
+  private fetchInitialData(date: string): Promise<void> {
+    this.isLoading = true;
+    console.log('Fetching initial data for date:', date); // Debug log
+    
+    return new Promise((resolve, reject) => {
+      this.http.get<APIResponse>(this.API_URL, { params: { date } })
+        .pipe(
+          tap(response => console.log('Raw API response:', response)), // Debug log
+          finalize(() => {
+            this.isLoading = false;
+          })
+        )
+        .subscribe({
+          next: (response) => {
+            if (response.data.length === 0) {
+              console.warn('No data available for date:', date);
+            }
+            this.totalDataPoints = response.total;
+            this.plotRoverPath(response);
+            resolve();
+          },
+          error: (error) => {
+            console.error(`Error fetching data for date: ${date}`, error);
+            reject(error);
+          }
+        });
+    });
+  }
   
   // Initialize the Leaflet map
   initializeMap(): void {
+    // Add your Mapbox access token here
+    const accessToken = 'pk.eyJ1IjoibHVjaWxhcnkiLCJhIjoiY20zbzZmNTY1MDA3cjJwcHl5enJ3azFhMSJ9.q24N9tj7qe4DW9qmQ7QXWQ';
+    
+    // Initialize the map
     this.map = L.map('map').setView([13.9018, 100.5317], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  
+    // Add Mapbox satellite tiles
+    L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+      attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a>',
       maxZoom: 19,
-      attribution: '© OpenStreetMap contributors'
+      id: 'satellite-v9', // You can change this to other styles
+      accessToken: accessToken
     }).addTo(this.map);
+  
+    // Optional: Add layer controls
+    const baseMaps = {
+      "Satellite": L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+        attribution: '© Mapbox',
+        maxZoom: 19,
+        accessToken: accessToken
+      }),
+      "Streets": L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+        attribution: '© Mapbox',
+        maxZoom: 19,
+        accessToken: accessToken
+      })
+    };
+  
+    L.control.layers(baseMaps).addTo(this.map);
   }
 
   // Fetch data from API
@@ -154,7 +229,6 @@ export class MonitorComponent implements OnInit {
   onDateSelect(event: any): void {
     let selectedDate: Date;
     
-    // Handle both input element change and calendar selection
     if (event instanceof Date) {
       selectedDate = event;
     } else if (event.target?.value) {
@@ -163,16 +237,27 @@ export class MonitorComponent implements OnInit {
       console.error('Invalid date event:', event);
       return;
     }
-  
+    
     this.selectedDate = selectedDate;
-    const formattedDate = selectedDate.toISOString().split('T')[0];
-    this.isCalendarVisible = false;
+    const formattedDate = this.formatDate(selectedDate);
+    console.log('Selected date formatted:', formattedDate); // Debug log
+    
+    this.fetchRoverPath(formattedDate);
+  }
+
+  fetchRoverPath(date: string): void {
+    this.isLoading = true;
+    const params = { date };
   
-    // Call API and update map
-    this.http.get<APIResponse>(this.API_URL, { params: { date: formattedDate } })
+    this.http.get<APIResponse>(this.API_URL, { params })
+      .pipe(
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
       .subscribe({
         next: (response) => {
-          console.log('API Response:', response);
+          console.log('Data fetched:', response);
           this.totalDataPoints = response.total;
           this.plotRoverPath(response);
         },
@@ -181,21 +266,6 @@ export class MonitorComponent implements OnInit {
         }
       });
   }
-
-  fetchRoverPath(date: string): void {
-    const params = { date: date };
-
-    this.http.get<APIResponse>(this.API_URL, { params }).subscribe(
-      response => {
-        this.totalDataPoints = response.total;
-        this.plotRoverPath(response);
-      },
-      error => {
-        console.error('Error fetching rover path data', error);
-      }
-    );
-  }
-
   plotRoverPath(roverPath: any): void {
     this.clearMarkers();
     console.log('Received roverPath:', roverPath);
@@ -406,28 +476,32 @@ getRandomColor(): string {
 
 
 
-getDatabaseStatus(): void {
-  this.isLoading = true;
-  
-  this.http.get<StatusResponse>('https://8h8rxm8ld9.execute-api.ap-southeast-1.amazonaws.com/default/Table-Status')
-    .pipe(
-      tap((response: StatusResponse) => {
-        console.log('API Response:', response);
-      }),
-      finalize(() => {
-        this.isLoading = false;
-        console.log('Request completed');
-      })
-    )
-    .subscribe({
-      next: (response: StatusResponse) => {
-        this.currentStatus = response.status;
-        console.log('Status updated:', this.currentStatus);
-      },
-      error: (error) => {
-        console.error('API Error:', error);
-        this.currentStatus = 'offline';
-      }
+private getDatabaseStatus(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    this.isLoading = true;
+    
+    this.http.get<StatusResponse>('https://8h8rxm8ld9.execute-api.ap-southeast-1.amazonaws.com/default/Table-Status')
+      .pipe(
+        tap((response: StatusResponse) => {
+          console.log('API Response:', response);
+        }),
+        finalize(() => {
+          this.isLoading = false;
+          console.log('Request completed');
+        })
+      )
+      .subscribe({
+        next: (response: StatusResponse) => {
+          this.currentStatus = response.status;
+          console.log('Status updated:', this.currentStatus);
+          resolve();
+        },
+        error: (error) => {
+          console.error('API Error:', error);
+          this.currentStatus = 'offline';
+          reject(error);
+        }
+      });
     });
 }
 
