@@ -3,9 +3,11 @@ frontend:
   phases:
     preBuild:
       commands:
+        - nvm install 18.19.0
+        - nvm use 18.19.0
+        - node -v
         - npm cache clean --force
         - npm ci --legacy-peer-deps
-        - npm install @ctrl/tinycolor --save
     build:
       commands:
         - npm run build
