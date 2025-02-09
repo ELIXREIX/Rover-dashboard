@@ -3,18 +3,32 @@ frontend:
   phases:
     preBuild:
       commands:
+        # Set Node.js version
         - nvm install 18.19.0
         - nvm use 18.19.0
         - node -v
+        # Clean up space
+        - rm -rf node_modules/.cache
         - npm cache clean --force
-        - npm ci --legacy-peer-deps
+        # Install dependencies
+        - npm ci --legacy-peer-deps --no-optional
+        - npm install @ctrl/tinycolor --save --no-optional
     build:
       commands:
-        - npm run build
+        - echo "Building Angular app..."
+        - npm run build -- --configuration=production --output-hashing=all
+        - echo "Build completed"
   artifacts:
     baseDirectory: dist/my-ngzorro-app/browser
     files:
       - '**/*'
+    # Exclude unnecessary files
+    exclude:
+      - node_modules/**/*
+      - e2e/**/*
+      - coverage/**/*
+      - .angular/cache/**/*
   cache:
     paths:
       - node_modules/**/*
+      - '!node_modules/.cache/**/*'
