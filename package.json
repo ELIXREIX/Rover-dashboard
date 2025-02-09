@@ -3,12 +3,15 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
+    "start": "ng serve --proxy-config proxy.conf.json",
+    "start:prod": "http-server dist/my-ngzorro-app -p 8081 --cors -o /browser/#/login",
     "build": "ng build",
+    "build:prod": "ng build --configuration=production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "serve:ssr:my-ngzorro-app": "node dist/my-ngzorro-app/server/server.mjs"
-  },
+    "serve:ssr:my-ngzorro-app": "node dist/my-ngzorro-app/server/server.mjs",
+    "deploy": "powershell -ExecutionPolicy Bypass -File ./deploy.ps1"  },
+    "deploy:dry": "ng build --configuration=production",
   "private": true,
   "dependencies": {
     "@angular/animations": "^18.2.0",

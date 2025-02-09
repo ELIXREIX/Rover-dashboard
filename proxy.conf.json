@@ -7,9 +7,9 @@
       "^/api": "/Deploy"
     },
     "headers": {
-      "Origin": "http://localhost:4200",
-      "Access-Control-Request-Method": "POST",
-      "Access-Control-Request-Headers": "content-type,accept"
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Authorization"
     },
     "logLevel": "debug"
   }

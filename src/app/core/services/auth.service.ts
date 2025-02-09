@@ -31,10 +31,10 @@ export class AuthService {
   }
 
   login(username: string, password: string): Observable<LoginResponse> {
-    const headers = new HttpHeaders()
-      .set('Content-Type', 'application/json')
-      .set('Accept', 'application/json');
-
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    });
     // Format request body without extra nesting
     const requestBody = {
       body: JSON.stringify({
@@ -51,19 +51,17 @@ export class AuthService {
       map(response => {
         let parsedResponse: LoginResponse;
         try {
-          // Handle AWS Lambda proxy integration response format
-          const responseBody = typeof response.body === 'string' 
-            ? JSON.parse(response.body) 
-            : response;
+          const responseData = response.body ? JSON.parse(response.body) : response;
+
 
           // Create a dummy token since API doesn't provide one
           const token = btoa(`${username}:${new Date().getTime()}`);
           
           const parsedResponse: LoginResponse = {
-            success: response.statusCode === 200,
-            message: responseBody.message || 'Login successful',
-            token: token,
-            statusCode: response.statusCode
+            success: response.statusCode === 200 || responseData.statusCode === 200,
+            message: responseData.message || 'Login successful',
+            token: responseData.token || btoa(`${username}:${new Date().getTime()}`),
+            statusCode: response.statusCode || responseData.statusCode || 200
           };
 
           if (parsedResponse.success) {
