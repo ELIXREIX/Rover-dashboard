@@ -12,6 +12,9 @@
     "serve:ssr:my-ngzorro-app": "node dist/my-ngzorro-app/server/server.mjs",
     "deploy": "powershell -ExecutionPolicy Bypass -File ./deploy.ps1"  },
     "deploy:dry": "ng build --configuration=production",
+    "build:amplify": "ng build --configuration=production",
+    "deploy:amplify": "amplify push",
+    "test:amplify": "ng test --watch=false --browsers=ChromeHeadless",
   "private": true,
   "dependencies": {
     "@angular/animations": "^18.2.0",
