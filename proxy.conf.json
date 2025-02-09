@@ -5,6 +5,12 @@
     "changeOrigin": true,
     "pathRewrite": {
       "^/api": "/Deploy"
-    }
+    },
+    "headers": {
+      "Origin": "http://localhost:4200",
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "content-type,accept"
+    },
+    "logLevel": "debug"
   }
 } 

@@ -37,12 +37,23 @@
                 </div>
                 </div>
                 <div class="status-item">
+                    <button 
+                    class="refresh-button" 
+                    (click)="refreshData()" 
+                    [disabled]="isLoading"
+                    title="Refresh data">
+                    <i nz-icon nzType="reload" nzTheme="outline" [nzSpin]="isLoading"></i>
+                    <span class="refresh-text">Reload Data</span>
+                    </button>
+                    <span></span>
+                </div>
+                <!-- <div class="status-item">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"></circle>
                         <path d="M12 16l4-4-4-4M8 12h8"></path>
                     </svg>
                     <span>GPS Active</span>
-                </div>
+                </div> -->
                 <div class="status-item-cloud" [class]="currentStatus">
                     <span>{{ getCurrentStatusText() }}</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -82,8 +93,14 @@
                         <div class="metric-value">0.6 m/s</div>
                     </div>
                     <div class="metric">
-                        <div class="metric-label">Active Time</div>
-                        <div class="metric-value">0 m</div>
+                        <div class="metric-label">
+                            <i nz-icon nzType="clock-circle" nzTheme="outline"></i>
+                            Active Time
+                        </div>
+                        <div class="metric-value" id="active-time-value">
+                            <nz-spin *ngIf="isLoading" nzSimple [nzSize]="'small'"></nz-spin>
+                            <span *ngIf="!isLoading">No data</span>
+                        </div>
                     </div>
                 </div>
                 

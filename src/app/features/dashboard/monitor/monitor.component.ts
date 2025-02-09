@@ -9,10 +9,10 @@ import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { FormsModule } from '@angular/forms';
 import { NzCalendarModule } from 'ng-zorro-antd/calendar';
 import { NzModalModule } from 'ng-zorro-antd/modal';
-import { DatePipe } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { NzRadioModule } from 'ng-zorro-antd/radio';
 import { NzIconModule } from 'ng-zorro-antd/icon';
-
+import { ClockCircleOutline } from '@ant-design/icons-angular/icons';
 
 
 // Define the RoverPoint interface to type the rover path data
@@ -66,7 +66,8 @@ interface StatusResponse {
     DatePipe,
     NzRadioModule,
     FormsModule,
-    NzIconModule
+    NzIconModule,
+    CommonModule,
   ], 
   templateUrl: './monitor.component.html',
   styleUrls: ['./monitor.component.css'],
@@ -86,6 +87,7 @@ export class MonitorComponent implements OnInit {
   roverPoints: RoverPoint[] = [];
   selectedDate: Date = new Date();
   nzMode: 'month' | 'year' = 'month';
+  private dataRefreshInterval: any;
 
   isLoading = false;
   statusText = {
@@ -116,7 +118,6 @@ export class MonitorComponent implements OnInit {
     const formattedDate = this.formatDate(knownDate);
     console.log('Initial date set to:', formattedDate); // Debug log
 
-// Chain the initialization sequence
     Promise.all([
       this.getDatabaseStatus(),
       this.fetchInitialData(formattedDate)
@@ -127,14 +128,38 @@ export class MonitorComponent implements OnInit {
       this.refreshInterval = setInterval(() => {
         this.getDatabaseStatus();
       }, this.REFRESH_RATE_DB);
+
+      // Set up data refresh interval
+      this.dataRefreshInterval = setInterval(() => {
+        this.refreshData();
+      }, this.REFRESH_RATE);
+      
     }).catch(error => {
       console.error('Error during initialization:', error);
+    });
+  }
+
+  refreshData(): void {
+    if (this.isLoading) return;
+    
+    const formattedDate = this.formatDate(this.selectedDate);
+    console.log('Refreshing data for date:', formattedDate);
+  
+    Promise.all([
+      this.fetchInitialData(formattedDate)
+    ]).then(() => {
+      console.log('Data refreshed successfully');
+    }).catch(error => {
+      console.error('Error refreshing data:', error);
     });
   }
 
   ngOnDestroy(): void {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
+    }
+    if (this.dataRefreshInterval) {
+      clearInterval(this.dataRefreshInterval);
     }
   }
 
@@ -192,7 +217,7 @@ export class MonitorComponent implements OnInit {
     this.map = L.map('map').setView([13.9018, 100.5317], 15);
   
     // Add Mapbox satellite tiles
-    L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a>',
       maxZoom: 19,
       id: 'satellite-v9', // You can change this to other styles
@@ -201,12 +226,12 @@ export class MonitorComponent implements OnInit {
   
     // Optional: Add layer controls
     const baseMaps = {
-      "Satellite": L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+      "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: '© Mapbox',
         maxZoom: 19,
         accessToken: accessToken
       }),
-      "Streets": L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+      "Streets": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© Mapbox',
         maxZoom: 19,
         accessToken: accessToken
@@ -415,17 +440,38 @@ document.addEventListener('click', function(e) {
   
       // Calculate and update path metrics
       if (roverPath.data.length >= 2) {
-        const firstPoint = roverPath.data[0];
-        const lastPoint = roverPath.data[roverPath.data.length - 1];
-        const lat1 = parseFloat(firstPoint.Latitude.N);
-        const lon1 = parseFloat(firstPoint.Longitude.N);
-        const lat2 = parseFloat(lastPoint.Latitude.N);
-        const lon2 = parseFloat(lastPoint.Longitude.N);
+        const sortedData = [...roverPath.data].sort((a, b) => {
+          const aTime = new Date(`${a.Date.S} ${a.Time.S}`).getTime();
+          const bTime = new Date(`${b.Date.S} ${b.Time.S}`).getTime();
+          return aTime - bTime;
+        });
+
+        const firstTimestamp = new Date(`${sortedData[0].Date.S} ${sortedData[0].Time.S}`).getTime();
+        const lastTimestamp = new Date(`${sortedData[sortedData.length - 1].Date.S} ${sortedData[sortedData.length - 1].Time.S}`).getTime();
+
+        const [actualFirst, actualLast] = firstTimestamp < lastTimestamp 
+        ? [sortedData[0], sortedData[sortedData.length - 1]] 
+        : [sortedData[sortedData.length - 1], sortedData[0]];
+
+        const firstPoint = sortedData[0];
+        const lastPoint = sortedData[sortedData.length - 1];
+        const lat1 = parseFloat(actualFirst.Latitude.N);
+        const lon1 = parseFloat(actualFirst.Longitude.N);
+        const lat2 = parseFloat(actualLast.Latitude.N);
+        const lon2 = parseFloat(actualLast.Longitude.N);
         const distance = this.calculateDistance(lat1, lon1, lat2, lon2);
         
-        const distanceElement = document.querySelector('.metric-value');
+        // Update distance display
+        const distanceElement = document.querySelector('.metric:first-child .metric-value');
         if (distanceElement) {
           distanceElement.textContent = `${distance.toFixed(2)} km`;
+        }
+
+        // Calculate and update active time
+        const activeTime = this.calculateActiveTime(firstPoint, lastPoint);
+        const activeTimeElement = document.querySelector('.metric:nth-child(4) .metric-value');
+        if (activeTimeElement) {
+          activeTimeElement.textContent = activeTime;
         }
       }
     } else {
@@ -507,6 +553,38 @@ private getDatabaseStatus(): Promise<void> {
 
 getCurrentStatusText(): string {
   return this.statusText[this.currentStatus] || 'Unknown Status';
+}
+
+private calculateActiveTime(firstPoint: any, lastPoint: any): string {
+
+  // Sort the points by timestamp
+  const firstTimestamp = new Date(`${firstPoint.Date.S} ${firstPoint.Time.S}`).getTime();
+  const lastTimestamp = new Date(`${lastPoint.Date.S} ${lastPoint.Time.S}`).getTime();
+
+  // Determine which point is actually first and last
+  const [actualFirst, actualLast] = firstTimestamp < lastTimestamp 
+    ? [firstPoint, lastPoint] 
+    : [lastPoint, firstPoint];
+
+  // Convert time strings to Date objects
+  const firstTime = new Date(`${actualFirst.Date.S} ${actualFirst.Time.S}`);
+  const lastTime = new Date(`${actualLast.Date.S} ${actualLast.Time.S}`);
+
+  // Calculate difference in milliseconds
+  const diffMs = Math.abs(lastTime.getTime() - firstTime.getTime());
+  
+  // Convert to minutes
+  const minutes = Math.floor(diffMs / 60000);
+  
+  // Format the output
+  if (minutes < 60) {
+    return `${minutes} minutes`;
+  } else {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours}hours ${remainingMinutes}minutes`;
+  }
+  
 }
 
 }

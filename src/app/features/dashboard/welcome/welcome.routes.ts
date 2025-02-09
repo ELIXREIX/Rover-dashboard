@@ -5,5 +5,5 @@ export const WELCOME_ROUTES: Routes = [
   {
     path: '',
     component: WelcomeComponent
-  }
+  },
 ];

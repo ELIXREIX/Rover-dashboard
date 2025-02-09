@@ -282,3 +282,34 @@ body {
     border-color: transparent;
   }
 }
+
+.refresh-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  gap: 4px;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  transition: background-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.refresh-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.refresh-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.refresh-button i {
+  font-size: 16px;
+}
+
+.refresh-text {
+  font-size: 14px;
+  margin-left: 4px;
+}
