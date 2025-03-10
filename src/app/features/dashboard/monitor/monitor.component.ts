@@ -302,6 +302,9 @@ export class MonitorComponent implements OnInit {
         const dataPoints = roverPath.data.length;
         dataPointsElement.textContent = dataPoints.toString();
       }
+
+      const proximityThreshold = 0.00005; // Threshold for grouping in degrees
+      const pointGroups: any[][] = [];
   
       // Process each point
       roverPath.data.forEach((point: any, index: number) => {
@@ -318,124 +321,167 @@ export class MonitorComponent implements OnInit {
         const ec = point.EC ? parseFloat(point.EC.N) : NaN;
         const altitude = point.Altitude ? parseFloat(point.Altitude.N) : NaN;
   
-        if (latitude !== undefined && longitude !== undefined) {
-          const circle = L.circleMarker([latitude, longitude], {
-            radius: 8,
-            fillColor: this.getRandomColor(),
-            color: '#fff',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.8
-          }).addTo(this.map);
-  
-          this.markers.push(circle);  // Store marker reference
-  
-          circle.on('click', () => {
-            // Find nearby points
-            const nearbyPoints = roverPath.data.map((p: any, globalIndex: number) => ({
-              ...p,
-              globalIndex: globalIndex + 1
-            })).filter((p: any) => {
-              const pLat = parseFloat(p.Latitude.N);
-              const pLon = parseFloat(p.Longitude.N);
-              return Math.abs(pLat - latitude) < 0.00005 && 
-                     Math.abs(pLon - longitude) < 0.00005;
-            });
-  
-            let currentPointIndex = 0;
-  
-            const updatePopupContent = (pointIndex: number) => {
-              const point = nearbyPoints[pointIndex];
-              return `
-                <div class="popup-container">
-                  <div class="popup-navigation">
-                    ${pointIndex > 0 ? '<button class="nav-btn prev">←</button>' : ''}
-                    <span>Point ${point.globalIndex} (${pointIndex + 1}/${nearbyPoints.length})</span>
-                    ${pointIndex < nearbyPoints.length - 1 ? '<button class="nav-btn next">→</button>' : ''}
-                  </div>
-                  <div class="popup-content">
-                    Temperature: ${parseFloat(point.Temp.N).toFixed(1)}°C<br>
-                    Moisture: ${parseFloat(point.Moisture.N).toFixed(1)}%<br>
-                    pH: ${parseFloat(point.pH.N).toFixed(2)}<br>
-                    NPK: ${parseFloat(point.N.N).toFixed(1)}/${parseFloat(point.P.N).toFixed(1)}/${parseFloat(point.K.N).toFixed(1)}<br>
-                    EC: ${parseFloat(point.EC.N).toFixed(2)} mS/cm<br>
-                    Time: ${point.Time.S}<br>
-                    Date: ${point.Date.S}
-                  </div>
+        if (latitude === undefined || longitude === undefined) return;
+      
+        // Check if point is close to any existing group
+        let foundGroup = false;
+        for (const group of pointGroups) {
+          const groupPoint = group[0]; // Use first point as reference
+          const groupLat = parseFloat(groupPoint.Latitude.N);
+          const groupLon = parseFloat(groupPoint.Longitude.N);
+          
+          if (Math.abs(latitude - groupLat) < proximityThreshold && 
+              Math.abs(longitude - groupLon) < proximityThreshold) {
+            group.push({...point, originalIndex: index}); // Add to existing group with index
+            foundGroup = true;
+            break;
+          }
+        }
+        
+        // If not close to any group, create new group
+        if (!foundGroup) {
+          pointGroups.push([{...point, originalIndex: index}]);
+        }
+      });
+      
+      console.log(`Grouped ${roverPath.data.length} points into ${pointGroups.length} clusters`);
+      
+      // Create markers for each group
+      pointGroups.forEach((group: any[]) => {
+        // Use the first point's coordinates for the marker
+        const firstPoint = group[0];
+        const latitude = parseFloat(firstPoint.Latitude.N);
+        const longitude = parseFloat(firstPoint.Longitude.N);
+        
+        // Calculate average values for display
+        const temperature = group.reduce((sum, p) => sum + parseFloat(p.Temp.N), 0) / group.length;
+        const moisture = group.reduce((sum, p) => sum + parseFloat(p.Moisture.N), 0) / group.length;
+        
+        // Create a marker for the group
+        const circle = L.circleMarker([latitude, longitude], {
+          radius: 6 + Math.min(4, group.length - 1), // Slightly larger radius for groups with more points
+          fillColor: this.getRandomColor(),
+          color: '#fff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.8
+        }).addTo(this.map);
+        
+        // Expanded coverage area indicator with larger radius for visibility
+        const coverageRadius = this.degreesToMeters(proximityThreshold * 2.0); // 50% larger than the grouping threshold
+        const coverageArea = L.circle([latitude, longitude], {
+          radius: coverageRadius,
+          color: '#3388ff',
+          weight: 1,
+          opacity: 0.5,
+          fillOpacity: 0.2,
+          interactive: false // Make it non-interactive so it doesn't interfere with clicks
+        }).addTo(this.map);
+        
+        this.markers.push(circle);  // Store marker reference
+        this.markers.push(coverageArea);  // Store coverage area reference
+        
+        // Add click handler to show all points in this group
+        circle.on('click', () => {
+          // Map grouped points to include global index
+          const groupedPoints = group.map((p: any) => ({
+            ...p,
+            globalIndex: p.originalIndex + 1
+          }));
+          
+          let currentPointIndex = 0;
+          
+          // Create popup content updater
+          const updatePopupContent = (pointIndex: number) => {
+            const point = groupedPoints[pointIndex];
+            return `
+              <div class="popup-container">
+                <div class="popup-navigation">
+                  ${pointIndex > 0 ? '<button class="nav-btn prev">←</button>' : ''}
+                  <span>Point ${point.globalIndex} (${pointIndex + 1}/${groupedPoints.length})</span>
+                  ${pointIndex < groupedPoints.length - 1 ? '<button class="nav-btn next">→</button>' : ''}
                 </div>
-              `;
-            };
-  
-            const popup = L.popup({
-              maxWidth: 300,
-              className: 'point-popup'
-            })
-            .setLatLng([latitude, longitude])
-            .setContent(updatePopupContent(currentPointIndex));
-  
-            circle.bindPopup(popup).openPopup();
-  
-// ...existing code...
-
-// Add event listeners for navigation buttons
-document.addEventListener('click', function(e) {
-  const target = e.target as HTMLElement;
-  if (target.classList.contains('prev')) {
-    currentPointIndex = Math.max(0, currentPointIndex - 1);
-    popup.setContent(updatePopupContent(currentPointIndex));
-    // Update selected point info with current point
-    const point = nearbyPoints[currentPointIndex];
-    document.getElementById('selected-point-info')!.innerHTML = `
-      <div class="data-point">
-        <strong>Point ${point.globalIndex}</strong><br>
-        Temperature: ${parseFloat(point.Temp.N).toFixed(1)}°C<br>
-        Moisture: ${parseFloat(point.Moisture.N).toFixed(1)}%<br>
-        pH: ${parseFloat(point.pH.N).toFixed(2)}<br>
-        NPK: ${parseFloat(point.N.N).toFixed(1)}/${parseFloat(point.P.N).toFixed(1)}/${parseFloat(point.K.N).toFixed(1)}<br>
-        EC: ${parseFloat(point.EC.N).toFixed(2)} mS/cm<br>
-        Altitude: ${parseFloat(point.Altitude.N)}m<br>
-        Time: ${point.Time.S}<br>
-        Date: ${point.Date.S}
-      </div>
-    `;
-  } else if (target.classList.contains('next')) {
-    currentPointIndex = Math.min(nearbyPoints.length - 1, currentPointIndex + 1);
-    popup.setContent(updatePopupContent(currentPointIndex));
-    // Update selected point info with current point
-    const point = nearbyPoints[currentPointIndex];
-    document.getElementById('selected-point-info')!.innerHTML = `
-      <div class="data-point">
-        <strong>Point ${point.globalIndex}</strong><br>
-        Temperature: ${parseFloat(point.Temp.N).toFixed(1)}°C<br>
-        Moisture: ${parseFloat(point.Moisture.N).toFixed(1)}%<br>
-        pH: ${parseFloat(point.pH.N).toFixed(2)}<br>
-        NPK: ${parseFloat(point.N.N).toFixed(1)}/${parseFloat(point.P.N).toFixed(1)}/${parseFloat(point.K.N).toFixed(1)}<br>
-        EC: ${parseFloat(point.EC.N).toFixed(2)} mS/cm<br>
-        Altitude: ${parseFloat(point.Altitude.N)}m<br>
-        Time: ${point.Time.S}<br>
-        Date: ${point.Date.S}
-      </div>
-    `;
-  }
-});
-
-// ...existing code...
-            // Update selected point info
-            document.getElementById('selected-point-info')!.innerHTML = `
-              <div class="data-point">
-                <strong>Point ${index + 1}</strong><br>
-                Temperature: ${temperature.toFixed(1)}°C<br>
-                Moisture: ${moisture.toFixed(1)}%<br>
-                pH: ${pH.toFixed(2)}<br>
-                NPK: ${nValue.toFixed(1)}/${pValue.toFixed(1)}/${kValue.toFixed(1)}<br>
-                EC: ${ec.toFixed(2)} mS/cm<br>
-                Altitude: ${altitude}m<br>
-                Time: ${time}<br>
-                Date: ${date}
+                <div class="popup-content">
+                  Temperature: ${parseFloat(point.Temp.N).toFixed(1)}°C<br>
+                  Moisture: ${parseFloat(point.Moisture.N).toFixed(1)}%<br>
+                  pH: ${parseFloat(point.pH.N).toFixed(2)}<br>
+                  NPK: ${parseFloat(point.N.N).toFixed(1)}/${parseFloat(point.P.N).toFixed(1)}/${parseFloat(point.K.N).toFixed(1)}<br>
+                  EC: ${parseFloat(point.EC.N).toFixed(2)} mS/cm<br>
+                  Time: ${point.Time.S}<br>
+                  Date: ${point.Date.S}
+                </div>
               </div>
             `;
+          };
+          
+          // Create and open popup
+          const popup = L.popup({
+            maxWidth: 300,
+            className: 'point-popup'
+          })
+          .setLatLng([latitude, longitude])
+          .setContent(updatePopupContent(currentPointIndex));
+          
+          circle.bindPopup(popup).openPopup();
+          
+          // Add event listeners for navigation buttons
+          document.addEventListener('click', function(e) {
+            const target = e.target as HTMLElement;
+            if (target.classList.contains('prev')) {
+              currentPointIndex = Math.max(0, currentPointIndex - 1);
+              popup.setContent(updatePopupContent(currentPointIndex));
+              // Update selected point info with current point
+              const point = groupedPoints[currentPointIndex];
+              document.getElementById('selected-point-info')!.innerHTML = `
+                <div class="data-point">
+                  <strong>Point ${point.globalIndex}</strong><br>
+                  Temperature: ${parseFloat(point.Temp.N).toFixed(1)}°C<br>
+                  Moisture: ${parseFloat(point.Moisture.N).toFixed(1)}%<br>
+                  pH: ${parseFloat(point.pH.N).toFixed(2)}<br>
+                  NPK: ${parseFloat(point.N.N).toFixed(1)}/${parseFloat(point.P.N).toFixed(1)}/${parseFloat(point.K.N).toFixed(1)}<br>
+                  EC: ${parseFloat(point.EC.N).toFixed(2)} mS/cm<br>
+                  Altitude: ${parseFloat(point.Altitude.N)}m<br>
+                  Time: ${point.Time.S}<br>
+                  Date: ${point.Date.S}
+                </div>
+              `;
+            } else if (target.classList.contains('next')) {
+              currentPointIndex = Math.min(groupedPoints.length - 1, currentPointIndex + 1);
+              popup.setContent(updatePopupContent(currentPointIndex));
+              // Update selected point info with current point
+              const point = groupedPoints[currentPointIndex];
+              document.getElementById('selected-point-info')!.innerHTML = `
+                <div class="data-point">
+                  <strong>Point ${point.globalIndex}</strong><br>
+                  Temperature: ${parseFloat(point.Temp.N).toFixed(1)}°C<br>
+                  Moisture: ${parseFloat(point.Moisture.N).toFixed(1)}%<br>
+                  pH: ${parseFloat(point.pH.N).toFixed(2)}<br>
+                  NPK: ${parseFloat(point.N.N).toFixed(1)}/${parseFloat(point.P.N).toFixed(1)}/${parseFloat(point.K.N).toFixed(1)}<br>
+                  EC: ${parseFloat(point.EC.N).toFixed(2)} mS/cm<br>
+                  Altitude: ${parseFloat(point.Altitude.N)}m<br>
+                  Time: ${point.Time.S}<br>
+                  Date: ${point.Date.S}
+                </div>
+              `;
+            }
           });
-        }
+          
+          // Update selected point info with first point in group
+          const point = groupedPoints[0];
+          document.getElementById('selected-point-info')!.innerHTML = `
+            <div class="data-point">
+              <strong>Point ${point.globalIndex}</strong><br>
+              Temperature: ${parseFloat(point.Temp.N).toFixed(1)}°C<br>
+              Moisture: ${parseFloat(point.Moisture.N).toFixed(1)}%<br>
+              pH: ${parseFloat(point.pH.N).toFixed(2)}<br>
+              NPK: ${parseFloat(point.N.N).toFixed(1)}/${parseFloat(point.P.N).toFixed(1)}/${parseFloat(point.K.N).toFixed(1)}<br>
+              EC: ${parseFloat(point.EC.N).toFixed(2)} mS/cm<br>
+              Altitude: ${parseFloat(point.Altitude.N)}m<br>
+              Time: ${point.Time.S}<br>
+              Date: ${point.Date.S}
+            </div>
+          `;
+        });
       });
   
       // Calculate and update path metrics
@@ -585,6 +631,12 @@ private calculateActiveTime(firstPoint: any, lastPoint: any): string {
     return `${hours}hours ${remainingMinutes}minutes`;
   }
   
+}
+
+degreesToMeters(degrees: number): number {
+  // Rough approximation: 1 degree of latitude is about 111,000 meters
+  // This is a simplified calculation and varies by latitude
+  return degrees * 111000;
 }
 
 }
